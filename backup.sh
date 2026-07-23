@@ -8,7 +8,21 @@ setup_gcp() {
 }
 
 pg_dump_database() {
-  pg_dump -v --no-owner --no-privileges --clean --if-exists --quote-all-identifiers "$DATABASE_URL"
+  # EXCLUDE_TABLE_DATA: optional comma-separated tables whose data to skip (schema
+  # is still dumped). Supports pg_dump patterns, e.g. "temp_*, public.audit_log".
+  local -a exclude_args=()
+  local table
+  IFS=',' read -ra tables <<< "${EXCLUDE_TABLE_DATA:-}"
+  for table in "${tables[@]}"; do
+    read -r table <<< "$table" # trim surrounding whitespace
+    [[ -n "$table" ]] && exclude_args+=(--exclude-table-data="$table")
+  done
+
+  # Log to stderr; stdout is the dump being piped into gzip.
+  [[ -n "${EXCLUDE_TABLE_DATA:-}" ]] && echo "Excluding table data: $EXCLUDE_TABLE_DATA" >&2
+
+  pg_dump -v --no-owner --no-privileges --clean --if-exists --quote-all-identifiers \
+    "${exclude_args[@]}" "$DATABASE_URL"
 }
 
 upload_to_bucket() {
