@@ -8,7 +8,29 @@ setup_gcp() {
 }
 
 pg_dump_database() {
-  pg_dump -v --no-owner --no-privileges --clean --if-exists --quote-all-identifiers "$DATABASE_URL"
+  local -a exclude_args=()
+
+  # EXCLUDE_TABLE_DATA is an optional, comma-separated list of tables whose *data*
+  # should be skipped (the schema is still dumped, so restores stay complete).
+  # Entries are trimmed and may use pg_dump patterns (e.g. "temp_*, public.audit_log").
+  if [[ -n "${EXCLUDE_TABLE_DATA:-}" ]]; then
+    local _t
+    IFS=',' read -ra _tables <<< "$EXCLUDE_TABLE_DATA"
+    for _t in "${_tables[@]}"; do
+      # Trim leading/trailing whitespace so "a, b , c" parses cleanly.
+      _t="${_t#"${_t%%[![:space:]]*}"}"
+      _t="${_t%"${_t##*[![:space:]]}"}"
+      [[ -z "$_t" ]] && continue
+      exclude_args+=(--exclude-table-data="$_t")
+    done
+  fi
+
+  # Log to stderr: stdout is piped into gzip, so anything here would corrupt the backup.
+  if [[ ${#exclude_args[@]} -gt 0 ]]; then
+    echo "Excluding data from tables matching: ${exclude_args[*]#--exclude-table-data=}" >&2
+  fi
+
+  pg_dump -v --no-owner --no-privileges --clean --if-exists --quote-all-identifiers "${exclude_args[@]}" "$DATABASE_URL"
 }
 
 upload_to_bucket() {

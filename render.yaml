@@ -20,4 +20,10 @@ services:
       # For example, 14
       - key: POSTGRES_VERSION
         sync: false
+      # Optional: comma-separated list of tables whose data should be skipped.
+      # The schema is still dumped (only the rows are omitted), so restores stay
+      # complete. Supports pg_dump patterns and schema qualification.
+      # For example, "temp_*, public.audit_log, event_stream". Leave blank to back up everything.
+      - key: EXCLUDE_TABLE_DATA
+        sync: false
 
