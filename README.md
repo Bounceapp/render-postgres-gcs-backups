@@ -10,13 +10,19 @@ See the guide for S3 at https://render.com/docs/backup-postgresql-to-s3 for more
 
 ## Excluding tables from the backup
 
-Set the optional `EXCLUDE_TABLE_DATA` environment variable to a comma-separated list of tables whose **data** should be skipped. The table schema is still included in the dump, so a restore remains complete — only the rows are omitted. This is useful for skipping large, non-critical tables (caches, logs, etc.) to keep backups smaller and faster.
+Set the optional `EXCLUDE_TABLE_DATA` environment variable to a comma-separated list of tables whose **data** to skip. The schema is still dumped — only the rows are dropped — so you can shrink backups by leaving out large, non-critical tables (caches, logs, etc.). Leave it unset to back up everything.
 
-Entries are whitespace-trimmed and passed through to `pg_dump --exclude-table-data`, so they support wildcards and schema qualification:
+Values are passed to `pg_dump --exclude-table-data`, so wildcards and schema qualification work:
 
 ```
 EXCLUDE_TABLE_DATA=temp_*, public.audit_log, event_stream
 ```
 
-An unqualified name (e.g. `event_stream`) matches that table in every schema; qualify it (e.g. `public.audit_log`) to limit it to one schema. A pattern that matches no table is silently ignored, so a mistyped name never fails the backup — it just backs up more than intended. Leave the variable unset or empty to back up everything.
+An unqualified name matches that table in every schema; qualify it (`public.audit_log`) to pin one schema.
+
+### Known limitations
+
+- **Typos pass silently.** A pattern that matches no table is ignored, so a misspelled name just backs up that table's data as usual. Check names against the live schema.
+- **Can break restores via foreign keys.** If a kept table references an excluded one, its rows lose their targets and the foreign key may fail to restore. Only exclude tables nothing else references.
+- **Doesn't cover partitions.** Excluding a partitioned table doesn't exclude its child partitions. List the children explicitly (or use a wildcard).
 
